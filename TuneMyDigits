@@ -1,0 +1,73 @@
+import tensorflow as tf
+import numpy as np
+from tensorflow import keras
+from keras.datasets import mnist
+from tensorflow.keras.utils import to_categorical
+from tensorflow.keras import layers, models
+from sklearn.model_selection import StratifiedKFold
+from tensorflow.keras.optimizers import Adam
+from tensorflow.keras import layers, models
+def create_model(filters, LearningRate):
+    model = models.Sequential()
+    model.add(layers.Conv2D(filters=filters, kernel_size=(3,3), activation='relu', input_shape=(28,28,1)))
+    model.add(layers.MaxPooling2D(pool_size=(2,2)))
+    model.add(layers.Flatten())
+    model.add(layers.Dense(units=10, activation='softmax'))
+    model.compile(optimizer=Adam(learning_rate=LearningRate), loss='categorical_crossentropy', metrics=['accuracy'])
+    return model
+def load_mnist_data():
+  (x_train, y_train), (x_test, y_test) = mnist.load_data()
+  y_train = to_categorical(y_train)
+  y_test = to_categorical(y_test)
+  x_train = x_train.reshape((x_train.shape[0]), 28, 28, 1)
+  x_test = x_test.reshape((x_test.shape[0]), 28, 28, 1) ##.shape[0] is the number of rows of the image, 28 by 28 pixels in each cell, 1 channel instead of 3
+  x_train = x_train.astype('float32')
+  x_test = x_test.astype('float32')
+  x_train = x_train / 255
+  x_test = x_test / 255 ##Normalization of pixel value dividing all 255 shades to [0,1] learn faster
+  x_train_copy = x_train
+  y_train_copy = y_train
+  return x_train, y_train, x_test, y_test, x_train_copy, y_train_copy
+def train_model(filterlist, Learningratelist):
+  kfoldaccuracies = []
+  bestaccuracy = 0
+  kfold = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+  y_train_labels = np.argmax(y_train, axis=1)
+  kfoldnumber=1
+  for filter in filterlist:
+    for LearningRate in Learningratelist:
+      print(f"Now on filter: {filter} and Learning Rate: {LearningRate}")
+      for train_index, val_index in kfold.split(x_train, y_train_labels):
+        print(f"Now on kfold number: {kfoldnumber}")
+        kfoldnumber+=1
+        model = create_model(filter, LearningRate)
+        x_train_fold, x_val = x_train[train_index], x_train[val_index]
+        y_train_fold, y_val = y_train[train_index], y_train[val_index]
+        model.fit(x_train_fold, y_train_fold, epochs=5, batch_size=64)
+        test_loss, score_acc = model.evaluate(x_val, y_val, verbose=0)
+        kfoldaccuracies.append(score_acc)
+      averageaccuracy = sum(kfoldaccuracies)/len(kfoldaccuracies)
+      if averageaccuracy > bestaccuracy:
+        bestaccuracy = averageaccuracy
+        bestfilter = filter
+        bestlearningrate = LearningRate
+      kfoldaccuracies = []
+      kfoldnumber=1
+  return bestfilter, bestlearningrate
+
+filterlist = [16,32]
+Learningratelist = [0.001, 0.01]
+
+x_train, y_train, x_test, y_test, x_train_copy, y_train_copy = load_mnist_data()
+bestfilter, bestlearningrate = train_model(filterlist, Learningratelist)
+
+bestmodel = create_model(bestfilter, bestlearningrate)
+bestmodel.fit(x_train_copy, y_train_copy, epochs=5, batch_size=64)
+test_loss, test_acc = bestmodel.evaluate(x_test, y_test)
+print(f"For the best model accuracy, the number of filters to use is {bestfilter} and the learning rate is {bestlearningrate}")
+print(f"The test accuracy for the best model is {test_acc}")
+
+
+
+
+
